@@ -40,12 +40,15 @@ parsePixel (QOIPixelIndex n) = n
 
 -- Encoding Algorithm
 -- prev pix == curr pix               -> QOI_OP_RUN
--- prev pix dif curr pix < smol_diff  -> QOI_DIFF_8
--- prev pix dif curr pix < big_diff   -> QOI_DIFF_16
--- curr pix seen before?              -> QOI_INDEX
--- cant have shit in detroit huh      -> QOI_PIXEL
+-- prev pix dif curr pix < smol_diff  -> QOI_OP_DIFF
+-- prev pix dif curr pix < big_diff   -> QOI_OP_LUMA
+-- curr pix seen before?              -> QOI_OP_INDEX
+-- cant have shit in detroit huh      -> QOI_OP_RGB
 
---encode :: FilePath -> IO DynamicImage
+hash :: QOIPixelRaw -> Int
+-- 	index_position = (r * 3 + g * 5 + b * 7 + a * 11) % 64
+
+encode :: [QOIPixelRaw] -> [QOIPixel]
 --encode path = do
 --    file <- readImage path
 --    let encodedImage = qoi file
@@ -55,7 +58,7 @@ mapPixels :: [(Pixel RGB Double)] -> [QOIPixel]
 mapPixels arr = Prelude.map pixelToTuple arr
 
 
--- Convert pixel to tuple of RGBA values
+-- Convert HIP pixel class to internal QOIPixelRaw
 pixelToTuple :: (Pixel RGB Double) -> QOIPixel
 pixelToTuple (PixelRGB r g b) = QOIPixelRaw r g b
 --
