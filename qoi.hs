@@ -7,6 +7,8 @@ import Debug.Trace
 import Graphics.Image
 import Graphics.Image.Interface
 import qualified Data.Vector.Unboxed as VU
+import Data.Bits (Bits(xor))
+import Control.Concurrent (yield)
 --import Data.Vector.Generic
 
 
@@ -45,14 +47,34 @@ parsePixel (QOIPixelIndex n) = n
 -- curr pix seen before?              -> QOI_OP_INDEX
 -- cant have shit in detroit huh      -> QOI_OP_RGB
 
-hash :: QOIPixelRaw -> Int
+--hash :: QOIPixelRaw -> Int
 -- 	index_position = (r * 3 + g * 5 + b * 7 + a * 11) % 64
 
-encode :: [QOIPixelRaw] -> [QOIPixel]
+--encode :: [QOIPixelRaw] -> [QOIPixel]
 --encode path = do
 --    file <- readImage path
 --    let encodedImage = qoi file
 --    return encodedImage
+
+processPixels [] = return ()
+processPixels [a] = return ()
+processPixels (prev:curr:rest) = do
+    case curr of
+        -- Case 1 where current pixel is the same as the previous pixel
+        --x | x == prev -> print "Same pixel\n"
+        -- Case 2 where current pixel gets stored as a diff of the previous
+        --x | isDiff x -> addAsDiff x
+        -- Case 3 where there is a larger diff between pixels
+        --x | isLargeDiff x -> addAsLargeDiff x
+        -- Case 4 where we have seen this pixel before, add to map
+        --x | seenBefore x -> addAsIndex x
+        -- Case 5 default case we just add it as it is
+        x -> print x
+    processPixels (curr:rest)
+
+
+encode pixels = do
+    processPixels pixels
 
 mapPixels :: [(Pixel RGB Double)] -> [QOIPixel]
 mapPixels arr = Prelude.map pixelToTuple arr
@@ -65,6 +87,6 @@ pixelToTuple (PixelRGB r g b) = QOIPixelRaw r g b
 main :: IO ()
 main = do
 --   Load image from file
-  image <- readImageRGB VU "images/car.jpg"
+  image <- readImageRGB VU "test.png"
   let pixels = mapPixels (VU.toList (toVector image))
-  print pixels
+  Main.encode pixels
