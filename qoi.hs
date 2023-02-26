@@ -30,7 +30,11 @@ data QOIPixel =
   QOIPixelIndex Int
   deriving Show
 
+instance Eq QOIPixelRaw where
+  QOIPixelRaw r1 g1 b1 == QOIPixelRaw r2 g2 b2 = r1 == r2 && g1 == g2 && b1 == b2
 
+hash :: QOIPixelRaw -> Int
+hash (QOIPixelRaw r g b) = (r * 3 + g * 5 + b * 7 + 11) `mod` 64
 
 parsePixel :: QOIPixel -> Int
 parsePixel (QOIPixelRaw _ _ b) = round b
