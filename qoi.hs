@@ -10,6 +10,7 @@ import qualified Data.Vector.Unboxed as VU
 import Data.Bits (Bits(xor))
 import Control.Concurrent (yield)
 import Data.Map
+import qualified Control.Applicative as Map
 --import Data.Vector.Generic
 
 
@@ -117,4 +118,5 @@ main = do
 --   Load image from file
   image <- readImageRGB VU "test.png"
   let pixels = mapPixels (VU.toList (toVector image))
-  print pixels
+  let processedPixels = processPixels pixels 0 empty []
+  print processedPixels
