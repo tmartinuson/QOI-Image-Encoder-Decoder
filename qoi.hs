@@ -17,34 +17,41 @@ import Data.Map
 -- the input type of pixel
 data PixelRaw = PixelRaw Int Int Int
   deriving (Show, Eq)
-{-
+
 toQOIPixel :: PixelRaw -> QOIPixel
-toQOIPixel (PixelRaw r g b) = (QOIPixelRaw r g b)
+toQOIPixel (PixelRaw r g b) = QOIPixelRaw r g b
+
+toQOIPixelDiffBeeg :: (Int, Int, Int) -> QOIPixel
+toQOIPixelDiffBeeg (r, g, b) = QOIPixelDiffBeeg r g b
+
+toQOIPixelDiffSmol :: (Int, Int, Int) -> QOIPixel
+toQOIPixelDiffSmol (r, g, b) = QOIPixelDiffSmol r g b
 
 -- QOI internal data types
 data QOIPixel =
-  QOIPixelRaw Double Double Double |
-  QOIPixelDiffSmol Double Double Double |
-  QOIPixelDiffBeeg Double Double Double |
+  QOIPixelRaw Int Int Int |
+  QOIPixelDiffSmol Int Int Int |
+  QOIPixelDiffBeeg Int Int Int |
   QOIPixelRun Int | -- maybe add prev pix?
   QOIPixelIndex Int
   deriving (Show, Eq)
 
+
 --instance Eq QOIPixelRaw where
 --  QOIPixelRaw r1 g1 b1 == QOIPixelRaw r2 g2 b2 = r1 == r2 && g1 == g2 && b1 == b2
 
-getPixelDiff :: PixelRaw -> PixelRaw -> (Double, Double, Double)
+getPixelDiff :: PixelRaw -> PixelRaw -> (Int, Int, Int)
 getPixelDiff (PixelRaw r1 g1 b1) (PixelRaw r2 g2 b2) = ((r1 - r2), (g1 - g2), (b1 - b2))
 
 -- the hash function return values between [0..63], so the Map structure doesn't need to worry about having a limited size
 hash :: PixelRaw -> Int
 hash (PixelRaw r g b) = (r * 3 + g * 5 + b * 7 + 11) `mod` 64
 
-isSmolDiff :: (Double, Double, Double) -> Bool
-isSmolDiff dr dg db = abs (dr) < 4 &&  abs (dg) < 4 &&  abs (db) < 4
+isSmolDiff :: (Int, Int, Int) -> Bool
+isSmolDiff (dr, dg, db) = abs (dr) < 4 &&  abs (dg) < 4 &&  abs (db) < 4
 
-isBeegDiff :: (Double, Double, Double) -> Bool
-isBeegDiff dr dg db = abs (dr) < 32 &&  abs (dg) < 16 &&  abs (db) < 16
+isBeegDiff :: (Int, Int, Int) -> Bool
+isBeegDiff (dr, dg, db) = abs (dr) < 32 && abs (dg) < 16 && abs (db) < 16
 
 -- Encoding Algorithm
 -- prev pix == curr pix               -> QOI_OP_RUN
@@ -61,7 +68,7 @@ isBeegDiff dr dg db = abs (dr) < 32 &&  abs (dg) < 16 &&  abs (db) < 16
 
 appendRun :: [QOIPixel] -> Int -> [QOIPixel]
 appendRun out run
-  | run > 0 = out ++ (QOIPixelRun run)
+  | run > 0 = out ++ [QOIPixelRun run]
   | otherwise = out
 
 -- first 2 args are the previous pixel and curr pixel.
@@ -73,26 +80,25 @@ processPixels :: [PixelRaw] -> Int -> Map Int PixelRaw -> [QOIPixel] -> [QOIPixe
 processPixels [] _ _ out = out
 processPixels [a] run seen out =
   if run > 0
-  then out ++ QOIPixelRun run
+  then out ++ [QOIPixelRun run]
   else if member (hash a) seen
-    then (out ++ QOIPixelIndex $ hash a)
-    else (out ++ a)
+    then (out ++ [QOIPixelIndex $ hash a])
+    else (out ++ [toQOIPixel a])
 processPixels (prev:curr:rest) run seen out --TODO add to start of list first pixel when calling func
   -- Case 1 where current pixel is the same as the previous pixel
   | prev == curr = if run >= 62
-                   then processPixels (curr:rest) 0 seen (out ++ QOIPixelRun run)
+                   then processPixels (curr:rest) 0 seen (out ++ [QOIPixelRun run])
                    else processPixels (curr:rest) (run + 1) seen out
   -- Case 2 if we've seen curr pixel before
-  | member (hash curr) seen = processPixels (curr:rest) 0 seen ((appendRun out run) ++ QOIPixelIndex (hash curr))
+  | member (hash curr) seen = processPixels (curr:rest) 0 seen ((appendRun out run) ++ [QOIPixelIndex (hash curr)])
   -- Case 3 small difference
-  | isSmolDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ QOIPixelDiffSmol (getPixelDiff prev curr))
+  | isSmolDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
   -- Case 4 large difference
-  | isBeegDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ QOIPixelDiffBeeg (getPixelDiff prev curr))
+  | isBeegDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
   -- Case 5 default case we just add it as it is
   | otherwise = processPixels (curr:rest) 0 (insert (hash curr) curr seen) (out ++ [(toQOIPixel curr)])
 
 
--}
 --encode :: [PixelRaw] -> [QOIPixel]
 --encode pxs = do
 --  let processed = processPixels pxs 0 empty []
