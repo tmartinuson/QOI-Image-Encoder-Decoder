@@ -61,12 +61,6 @@ isBeegDiff (dr, dg, db) = abs (dr) < 32 && abs (dg) < 16 && abs (db) < 16
 -- curr pix seen before?              -> QOI_OP_INDEX
 -- cant have shit in detroit huh      -> QOI_OP_RGB
 
---encode :: [QOIPixelRaw] -> [QOIPixel]
---encode path = do
---    file <- readImage path
---    let encodedImage = qoi file
---    return encodedImage
-
 appendRun :: [QOIPixel] -> Int -> [QOIPixel]
 appendRun out run
   | run > 0 = out ++ [QOIPixelRun run]
@@ -85,8 +79,13 @@ processPixels [a] run seen out =
   else if member (hash a) seen
     then (out ++ [QOIPixelIndex $ hash a])
     else (out ++ [toQOIPixel a])
-processPixels (prev:curr:rest) run seen out --TODO add to start of list first pixel when calling func
+processPixels (prev:curr:rest) run seen out = --TODO add to start of list first pixel when calling func
   -- Case 1 where current pixel is the same as the previous pixel
+  if prev == curr
+  then if run >= 62
+    then processPixels (curr:rest) 0 seen (out ++ [QOIPixelRun run])
+    else processPixels (curr:rest) (run + 1) seen out
+  else if
   | prev == curr = if run >= 62
                    then processPixels (curr:rest) 0 seen (out ++ [QOIPixelRun run])
                    else processPixels (curr:rest) (run + 1) seen out
