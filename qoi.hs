@@ -15,9 +15,9 @@ import Data.Map
 
 
 -- the input type of pixel
-data PixelRaw = PixelRaw Double Double Double
+data PixelRaw = PixelRaw Int Int Int
   deriving (Show, Eq)
-
+{-
 toQOIPixel :: PixelRaw -> QOIPixel
 toQOIPixel (PixelRaw r g b) = (QOIPixelRaw r g b)
 
@@ -92,7 +92,7 @@ processPixels (prev:curr:rest) run seen out --TODO add to start of list first pi
   | otherwise = processPixels (curr:rest) 0 (insert (hash curr) curr seen) (out ++ [(toQOIPixel curr)])
 
 
-
+-}
 --encode :: [PixelRaw] -> [QOIPixel]
 --encode pxs = do
 --  let processed = processPixels pxs 0 empty []
@@ -103,7 +103,8 @@ mapPixels arr = Prelude.map pixelToTuple arr
 
 -- Convert HIP pixel class to internal QOIPixelRaw
 pixelToTuple :: (Pixel RGB Double) -> PixelRaw
-pixelToTuple (PixelRGB r g b) = PixelRaw r g b
+pixelToTuple (PixelRGB r g b) = PixelRaw (round $ 255 * (r :: Double)) (round $ 255 * (g :: Double)) (round $ 255 * (b :: Double))
+
 --
 main :: IO ()
 main = do
