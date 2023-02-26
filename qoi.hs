@@ -9,40 +9,42 @@ import Graphics.Image.Interface
 import qualified Data.Vector.Unboxed as VU
 import Data.Bits (Bits(xor))
 import Control.Concurrent (yield)
+import Data.Map
 --import Data.Vector.Generic
 
 
--- QOI file format header
---data Header = Header
---  { hMagic :: MatchASCII "QOI magic" "qoif"
---  , hWidth :: Word32
---  , hHeight :: Word32
---  , hChannels :: Word8
---  , hColorspace :: Word8
---  } deriving (Eq, Show, Generic, Binary)
+
+-- the input type of pixel
+data PixelRaw = PixelRaw Double Double Double
+  deriving (Show, Eq)
+
+toQOIPixel :: PixelRaw -> QOIPixel
+toQOIPixel (PixelRaw r g b) = (QOIPixelRaw r g b)
 
 -- QOI internal data types
 data QOIPixel =
   QOIPixelRaw Double Double Double |
-  QOIPixelDiff8 Double Double Double |
-  QOIPixelDiff16 Double Double Double |
+  QOIPixelDiffSmol Double Double Double |
+  QOIPixelDiffBeeg Double Double Double |
   QOIPixelRun Int | -- maybe add prev pix?
   QOIPixelIndex Int
-  deriving Show
+  deriving (Show, Eq)
 
-instance Eq QOIPixelRaw where
-  QOIPixelRaw r1 g1 b1 == QOIPixelRaw r2 g2 b2 = r1 == r2 && g1 == g2 && b1 == b2
+--instance Eq QOIPixelRaw where
+--  QOIPixelRaw r1 g1 b1 == QOIPixelRaw r2 g2 b2 = r1 == r2 && g1 == g2 && b1 == b2
 
-hash :: QOIPixelRaw -> Int
-hash (QOIPixelRaw r g b) = (r * 3 + g * 5 + b * 7 + 11) `mod` 64
+getPixelDiff :: PixelRaw -> PixelRaw -> (Double, Double, Double)
+getPixelDiff (PixelRaw r1 g1 b1) (PixelRaw r2 g2 b2) = ((r1 - r2), (g1 - g2), (b1 - b2))
 
-parsePixel :: QOIPixel -> Int
-parsePixel (QOIPixelRaw _ _ b) = round b
-parsePixel (QOIPixelDiff8 _ _ b) = round b
-parsePixel (QOIPixelDiff16 _ _ b) = round b
-parsePixel (QOIPixelRun n) = n
-parsePixel (QOIPixelIndex n) = n
+-- the hash function return values between [0..63], so the Map structure doesn't need to worry about having a limited size
+hash :: PixelRaw -> Int
+hash (PixelRaw r g b) = (r * 3 + g * 5 + b * 7 + 11) `mod` 64
 
+isSmolDiff :: (Double, Double, Double) -> Bool
+isSmolDiff dr dg db = abs (dr) < 4 &&  abs (dg) < 4 &&  abs (db) < 4
+
+isBeegDiff :: (Double, Double, Double) -> Bool
+isBeegDiff dr dg db = abs (dr) < 32 &&  abs (dg) < 16 &&  abs (db) < 16
 
 -- Encoding Algorithm
 -- prev pix == curr pix               -> QOI_OP_RUN
@@ -51,46 +53,61 @@ parsePixel (QOIPixelIndex n) = n
 -- curr pix seen before?              -> QOI_OP_INDEX
 -- cant have shit in detroit huh      -> QOI_OP_RGB
 
---hash :: QOIPixelRaw -> Int
--- 	index_position = (r * 3 + g * 5 + b * 7 + a * 11) % 64
-
 --encode :: [QOIPixelRaw] -> [QOIPixel]
 --encode path = do
 --    file <- readImage path
 --    let encodedImage = qoi file
 --    return encodedImage
 
-processPixels [] = return ()
-processPixels [a] = return ()
-processPixels (prev:curr:rest) = do
-    case curr of
-        -- Case 1 where current pixel is the same as the previous pixel
-        --x | x == prev -> print "Same pixel\n"
-        -- Case 2 where current pixel gets stored as a diff of the previous
-        --x | isDiff x -> addAsDiff x
-        -- Case 3 where there is a larger diff between pixels
-        --x | isLargeDiff x -> addAsLargeDiff x
-        -- Case 4 where we have seen this pixel before, add to map
-        --x | seenBefore x -> addAsIndex x
-        -- Case 5 default case we just add it as it is
-        x -> print x
-    processPixels (curr:rest)
+appendRun :: [QOIPixel] -> Int -> [QOIPixel]
+appendRun out run
+  | run > 0 = out ++ (QOIPixelRun run)
+  | otherwise = out
+
+-- first 2 args are the previous pixel and curr pixel.
+-- Int is the run length, 0 if none
+-- second argument is the map of seen pixels
+-- last argument is array that is the array to write to
+-- returns an encoded list
+processPixels :: [PixelRaw] -> Int -> Map Int PixelRaw -> [QOIPixel] -> [QOIPixel]
+processPixels [] _ _ out = out
+processPixels [a] run seen out =
+  if run > 0
+  then out ++ QOIPixelRun run
+  else if member (hash a) seen
+    then (out ++ QOIPixelIndex $ hash a)
+    else (out ++ a)
+processPixels (prev:curr:rest) run seen out --TODO add to start of list first pixel when calling func
+  -- Case 1 where current pixel is the same as the previous pixel
+  | prev == curr = if run >= 62
+                   then processPixels (curr:rest) 0 seen (out ++ QOIPixelRun run)
+                   else processPixels (curr:rest) (run + 1) seen out
+  -- Case 2 if we've seen curr pixel before
+  | member (hash curr) seen = processPixels (curr:rest) 0 seen ((appendRun out run) ++ QOIPixelIndex (hash curr))
+  -- Case 3 small difference
+  | isSmolDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ QOIPixelDiffSmol (getPixelDiff prev curr))
+  -- Case 4 large difference
+  | isBeegDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ QOIPixelDiffBeeg (getPixelDiff prev curr))
+  -- Case 5 default case we just add it as it is
+  | otherwise = processPixels (curr:rest) 0 (insert (hash curr) curr seen) (out ++ [(toQOIPixel curr)])
 
 
-encode pixels = do
-    processPixels pixels
 
-mapPixels :: [(Pixel RGB Double)] -> [QOIPixel]
+--encode :: [PixelRaw] -> [QOIPixel]
+--encode pxs = do
+--  let processed = processPixels pxs 0 empty []
+
+mapPixels :: [(Pixel RGB Double)] -> [PixelRaw]
 mapPixels arr = Prelude.map pixelToTuple arr
 
 
 -- Convert HIP pixel class to internal QOIPixelRaw
-pixelToTuple :: (Pixel RGB Double) -> QOIPixel
-pixelToTuple (PixelRGB r g b) = QOIPixelRaw r g b
+pixelToTuple :: (Pixel RGB Double) -> PixelRaw
+pixelToTuple (PixelRGB r g b) = PixelRaw r g b
 --
 main :: IO ()
 main = do
 --   Load image from file
   image <- readImageRGB VU "test.png"
   let pixels = mapPixels (VU.toList (toVector image))
-  Main.encode pixels
+  print pixels
