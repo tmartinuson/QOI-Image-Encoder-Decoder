@@ -146,6 +146,18 @@ encodeToBinary arr = Prelude.map encodeQOIPixelToBinaryString arr
 writeByteStringListToDisk :: FilePath -> [B.ByteString] -> IO ()
 writeByteStringListToDisk filePath byteStrings = B.writeFile filePath (mconcat byteStrings)
 
+createHeader :: Int -> Int -> B.ByteString
+createHeader width height =
+  runPut $ do
+    putWord8 113 -- q ie. Magic Bytes that spell qoif
+    putWord8 111 -- o
+    putWord8 105 -- i
+    putWord8 102 -- f
+    putWord32le (fromIntegral width)
+    putWord32le (fromIntegral height)
+    putWord8 3 -- RGB channels only supported
+    putWord8 1 -- linear channels for colorspace
+
 --
 main :: IO ()
 main = do
@@ -156,7 +168,7 @@ main = do
   let fst = head pixels
   let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
   print processedPixels
-  let binaryEncoding = encodeToBinary processedPixels
+  let binaryEncoding = (createHeader (cols image) (rows image)):(encodeToBinary processedPixels)
   print binaryEncoding
   writeByteStringListToDisk "test.qoi" binaryEncoding
   print "Write successful"
