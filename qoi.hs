@@ -87,7 +87,7 @@ processPixels (prev:curr:rest) run seen out =
   -- Case 1 where current pixel is the same as the previous pixel
   if prev == curr
     then if run >= 62
-      then processPixels (curr:rest) 0 seen (out ++ [QOIPixelRun run])
+      then processPixels (curr:rest) 1 seen (out ++ [QOIPixelRun run])
       else processPixels (curr:rest) (run + 1) seen out
     -- Case 2 if we've seen curr pixel before
     else if member (hash curr) seen
@@ -146,6 +146,7 @@ encodeToBinary arr = Prelude.map encodeQOIPixelToBinaryString arr
 writeByteStringListToDisk :: FilePath -> [B.ByteString] -> IO ()
 writeByteStringListToDisk filePath byteStrings = B.writeFile filePath (mconcat byteStrings)
 
+-- Creates the header for a qoi formatted file
 createHeader :: Int -> Int -> B.ByteString
 createHeader width height =
   runPut $ do
@@ -158,6 +159,7 @@ createHeader width height =
     putWord8 3 -- RGB channels only supported
     putWord8 0 -- linear channels for colorspace
 
+-- Creates the end marker for a qoi formatted file
 createEndMarker :: B.ByteString
 createEndMarker = 
   runPut $ do
@@ -171,14 +173,18 @@ createEndMarker =
 main :: IO ()
 main = do
 --   Load image from file
-  image <- readImageRGB VU "test.png"
+  image <- readImageRGB VU "test3.png"
+  print "Read image"
   let pixels = mapPixels (VU.toList (toVector image))
-  print pixels
+  --print pixels
+  print "Grabbed raw pixels"
   let fst = head pixels
   let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
+  print "Processed QOI Pixels"
   print processedPixels
   let binaryEncoding = [createHeader (cols image) (rows image)] ++ (encodeToBinary processedPixels) ++ [createEndMarker]
-  print binaryEncoding
-  writeByteStringListToDisk "test.qoi" binaryEncoding
+  print "Encoded as Binary"
+  --print binaryEncoding
+  writeByteStringListToDisk "test3.qoi" binaryEncoding
   print "Write successful"
   
