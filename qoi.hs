@@ -1,18 +1,21 @@
 module Main where
 
+import qualified Data.Vector.Unboxed as VU
+import Data.Vector
+import qualified Control.Applicative as Map
+import qualified Data.ByteString.Lazy as LB
+import qualified Data.ByteString as SB
+import Data.ByteString.Char8 as C
 import Control.Concurrent.Async
 import Data.Word
 import Debug.Trace
 import Graphics.Image
 import Graphics.Image.Interface
-import qualified Data.Vector.Unboxed as VU
 import Data.Bits (Bits(xor, shiftL))
 import Control.Concurrent (yield)
 import Data.Map as M
-import qualified Control.Applicative as Map
 import Data.Bits
 import Data.Binary.Put
-import qualified Data.ByteString.Lazy as B
 import System.Directory
 import System.FilePath
 import Data.List as L
@@ -64,9 +67,9 @@ isBeegDiff (dr, dg, db) = abs (dr) < 32 && abs (dg) < 16 && abs (db) < 16
 -- cant have shit in detroit huh      -> QOI_OP_RGB
 
 -- Appends a new QOIPixelRun when there is a run of similar pixels
-appendRun :: [QOIPixel] -> Int -> [QOIPixel]
+appendRun :: Data.Vector.Vector QOIPixel -> Int -> Data.Vector.Vector QOIPixel
 appendRun out run
-  | run > 0 = out ++ [QOIPixelRun run]
+  | run > 0 = Data.Vector.snoc out (QOIPixelRun run)
   | otherwise = out
 
 -- first 2 args are the previous pixel and curr pixel.
@@ -74,26 +77,48 @@ appendRun out run
 -- second argument is the map of seen pixels
 -- last argument is array that is the array to write to
 -- returns an encoded list
-processPixels :: [PixelRaw] -> Int -> Map Int PixelRaw -> [QOIPixel] -> [QOIPixel]
-processPixels [] _ _ out = out
-processPixels [a] run seen out = (appendRun out run)
-processPixels (prev:curr:rest) run seen out =
-  -- Case 1 where current pixel is the same as the previous pixel
-  if prev == curr
-    then if run >= 62
-      then processPixels (curr:rest) 1 seen (out ++ [QOIPixelRun run])
-      else processPixels (curr:rest) (run + 1) seen out
-    -- Case 2 if we've seen curr pixel before and indexed it with a hash
-    else if member (hash curr) seen
-      then processPixels (curr:rest) 0 seen ((appendRun out run) ++ [QOIPixelIndex (hash curr)])
---  -- Case 3 is a small difference between the previous pixel
-      else if isSmolDiff (getPixelDiff prev curr)
-        then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
---  -- Case 4 is a larger (but not too large) difference between the previous pixel
-      else if isBeegDiff (getPixelDiff prev curr)
-       then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
---  -- Case 5 default case we just add it as it is
-       else processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [(toQOIPixel curr)])
+processPixels :: Data.Vector.Vector PixelRaw -> Int -> Map Int PixelRaw -> Data.Vector.Vector QOIPixel -> Data.Vector.Vector QOIPixel
+processPixels vec run seen out
+  | Data.Vector.null vec = out
+  | L.length vec == 1 = (appendRun out run)
+  | otherwise = do
+    let prev = Data.Vector.head vec
+    let rest = Data.Vector.tail vec
+    let curr = Data.Vector.head rest
+    if prev == curr
+      then if run >= 62
+        then processPixels (Data.Vector.snoc rest curr) 1 seen (Data.Vector.snoc out (QOIPixelRun run))
+        else processPixels (Data.Vector.snoc rest curr) (run + 1) seen out
+      -- Case 2 if we've seen curr pixel before and indexed it with a hash
+      else if member (hash curr) seen
+        then processPixels (Data.Vector.snoc rest curr) 0 seen (Data.Vector.snoc (appendRun out run) (QOIPixelIndex (hash curr)))
+  --  -- Case 3 is a small difference between the previous pixel
+        else if isSmolDiff (getPixelDiff prev curr)
+          then processPixels (Data.Vector.snoc rest curr) 0 (M.insert (hash curr) curr seen) (Data.Vector.snoc (appendRun out run) (toQOIPixelDiffSmol (getPixelDiff prev curr)))
+  --  -- Case 4 is a larger (but not too large) difference between the previous pixel
+        else if isBeegDiff (getPixelDiff prev curr)
+         then processPixels (Data.Vector.snoc rest curr) 0 (M.insert (hash curr) curr seen) (Data.Vector.snoc (appendRun out run) (toQOIPixelDiffBeeg (getPixelDiff prev curr)))
+  --  -- Case 5 default case we just add it as it is
+         else processPixels (Data.Vector.snoc rest curr) 0 (M.insert (hash curr) curr seen) (Data.Vector.snoc (appendRun out run) (toQOIPixel curr))
+--processPixels [] _ _ out = out
+--processPixels [a] run seen out = (appendRun out run)
+--processPixels (prev:curr:rest) run seen out =
+--  -- Case 1 where current pixel is the same as the previous pixel
+--  if prev == curr
+--    then if run >= 62
+--      then processPixels (curr:rest) 1 seen (Data.Vector.snoc out QOIPixelRun run)
+--      else processPixels (curr:rest) (run + 1) seen out
+--    -- Case 2 if we've seen curr pixel before and indexed it with a hash
+--    else if member (hash curr) seen
+--      then processPixels (curr:rest) 0 seen (Data.Vector.snoc (appendRun out run) QOIPixelIndex (hash curr))
+----  -- Case 3 is a small difference between the previous pixel
+--      else if isSmolDiff (getPixelDiff prev curr)
+--        then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) (Data.Vector.snoc (appendRun out run) toQOIPixelDiffSmol (getPixelDiff prev curr))
+----  -- Case 4 is a larger (but not too large) difference between the previous pixel
+--      else if isBeegDiff (getPixelDiff prev curr)
+--       then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) (Data.Vector.snoc (appendRun out run) toQOIPixelDiffBeeg (getPixelDiff prev curr))
+----  -- Case 5 default case we just add it as it is
+--       else processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) (Data.Vector.snoc (appendRun out run) (toQOIPixel curr))
 
 -- Maps pixels to pixel raws
 mapPixels :: [(Pixel RGB Double)] -> [PixelRaw]
@@ -104,7 +129,7 @@ pixelToTuple :: (Pixel RGB Double) -> PixelRaw
 pixelToTuple (PixelRGB r g b) = PixelRaw (round $ 255 * (r :: Double)) (round $ 255 * (g :: Double)) (round $ 255 * (b :: Double))
 
 -- Convert QOIPixel into its corresponding byte by QOI spec
-encodeQOIPixelToBinaryString :: QOIPixel -> B.ByteString
+encodeQOIPixelToBinaryString :: QOIPixel -> LB.ByteString
 encodeQOIPixelToBinaryString (QOIPixelRaw r g b) =
   runPut $ do
     putWord8 254
@@ -128,15 +153,19 @@ encodeQOIPixelToBinaryString (QOIPixelIndex index) =
     putWord8 ((0 `shiftL` 6) .|. (((fromIntegral index) .&. 0x3F)))
 
 -- Helper function for mapping all QOIPixels to their binary representations above
-encodeToBinary :: [(QOIPixel)] -> [B.ByteString]
-encodeToBinary arr = Prelude.map encodeQOIPixelToBinaryString arr
+encodeToBinary :: Data.Vector.Vector QOIPixel -> Data.Vector.Vector LB.ByteString
+encodeToBinary arr = Data.Vector.map encodeQOIPixelToBinaryString arr
+
+mapToStrict :: Data.Vector.Vector LB.ByteString -> Data.Vector.Vector SB.ByteString
+mapToStrict arr = Data.Vector.map LB.toStrict arr
 
 -- Writes a list of ByteStrings to the given FilePath
-writeByteStringListToDisk :: FilePath -> [B.ByteString] -> IO ()
-writeByteStringListToDisk filePath byteStrings = B.writeFile filePath (mconcat byteStrings)
+writeByteStringListToDisk :: FilePath -> Data.Vector.Vector SB.ByteString -> IO ()
+--writeByteStringListToDisk filePath byteStrings = SB.writeFile filePath (C.unwords (Data.Vector.toList byteStrings))
+writeByteStringListToDisk filePath byteStrings = SB.writeFile filePath (C.pack "wowoww")
 
 -- Creates the header for a qoi formatted file
-createHeader :: Int -> Int -> B.ByteString
+createHeader :: Int -> Int -> LB.ByteString
 createHeader width height =
   runPut $ do
     putWord8 113 -- q ie. Magic Bytes that spell qoif
@@ -149,7 +178,7 @@ createHeader width height =
     putWord8 0 -- linear channels for colorspace
 
 -- Creates the end marker for a qoi formatted file
-createEndMarker :: B.ByteString
+createEndMarker :: LB.ByteString
 createEndMarker = 
   runPut $ do
     putWord32le 0
@@ -162,33 +191,40 @@ createEndMarker =
 runEncode :: FilePath -> IO ()
 runEncode filePath = do
   let fileTitle = takeBaseName filePath
-  image <- readImageRGB VU ("./input/" ++ filePath)
-  putStrLn (filePath ++ ": reading file as image.")
+  image <- readImageRGB VU ("./input/" L.++ filePath)
+  Prelude.putStrLn (filePath L.++ ": reading file as image.")
   let pixels = mapPixels (VU.toList (toVector image))
-  putStrLn (filePath ++ ": created list of raw pixels.")
-  let fst = head pixels
-  let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
-  putStrLn (filePath ++ ": processed raw pixels into QOI pixels.")
-  let binaryEncoding = [createHeader (cols image) (rows image)] ++ (encodeToBinary processedPixels) ++ [createEndMarker]
-  putStrLn (filePath ++ ": encoded QOI pixels into binary.")
-  writeByteStringListToDisk ("./output/" ++ fileTitle ++ ".qoi") binaryEncoding
-  putStrLn (filePath ++ ": write to disk successful.")
+  Prelude.putStrLn (filePath L.++ ": created list of raw pixels.")
+  let fst = L.head pixels
+  let processedPixels = processPixels (Data.Vector.fromList pixels) 0 (M.singleton (hash fst) fst) (Data.Vector.singleton (toQOIPixel fst))
+  Prelude.putStrLn (filePath L.++ ": processed raw pixels into QOI pixels.")
+  print (Data.Vector.length processedPixels)
+  let binaryEncoding = (Data.Vector.singleton (createHeader (cols image) (rows image))) Data.Vector.++ (encodeToBinary processedPixels) Data.Vector.++ (Data.Vector.singleton createEndMarker)
+--  let binLen = length binaryEncoding
+--  Prelude.putStrLn "Length of binary string is: " L.++ binLen
+  Prelude.putStrLn (filePath L.++ ": encoded QOI pixels into binary.")
+  Prelude.putStrLn "starting converting to static byte string!"
+--  let static =  LB.toStrict (LB.fromChunks (mapToStrict binaryEncoding))
+  let static =  mapToStrict binaryEncoding
+  Prelude.putStrLn "converted to static byte string!"
+  writeByteStringListToDisk ("./output/" L.++ fileTitle L.++ ".qoi") static
+  Prelude.putStrLn (filePath L.++ ": write to disk successful.")
 
 -- Main CLI program - run with "cabal run qoi" and ensure desired pngs are placed under ./input
 main :: IO ()
 main = do
-  putStrLn "Welcome to our QOI Image Encoder!"
-  putStrLn "Please ensure your images (.png) that you would like to be encoded are under ./input."
-  putStrLn "Would you like to begin y/n?"
-  input <- getLine
+  Prelude.putStrLn "Welcome to our QOI Image Encoder!"
+  Prelude.putStrLn "Please ensure your images (.png) that you would like to be encoded are under ./input."
+  Prelude.putStrLn "Would you like to begin y/n?"
+  input <- Prelude.getLine
   case input of
     "y" -> do
-        files <- getDirectoryContents "./input"
-        let filePaths = L.filter (".png" `isSuffixOf`) files
-        _ <- mapConcurrently runEncode filePaths
-        putStrLn "Finishing Run..."
+--        files <- getDirectoryContents "./input"
+--        let filePaths = L.filter (".png" `isSuffixOf`) files
+        _ <- mapConcurrently runEncode ["test.png"]
+        Prelude.putStrLn "Finishing Run..."
     "n" -> do
-        putStrLn "Exiting QOI Image Encoder"
+        Prelude.putStrLn "Exiting QOI Image Encoder"
     _ -> do
-        putStrLn "Invalid input. Please enter 'y' or 'n'."
+        Prelude.putStrLn "Invalid input. Please enter 'y' or 'n'."
         main
