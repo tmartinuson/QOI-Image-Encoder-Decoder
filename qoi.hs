@@ -80,7 +80,7 @@ appendRun out run
 processPixels :: [PixelRaw] -> Int -> Map Int PixelRaw -> [QOIPixel] -> [QOIPixel]
 processPixels [] _ _ out = out
 processPixels [a] run seen out = (appendRun out run)
-processPixels (prev:curr:rest) run seen out = --TODO add to start of list first pixel when calling func
+processPixels (prev:curr:rest) run seen out =
   -- Case 1 where current pixel is the same as the previous pixel
   if prev == curr
     then if run >= 62
