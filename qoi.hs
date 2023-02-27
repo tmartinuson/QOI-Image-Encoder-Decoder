@@ -1,7 +1,6 @@
 module Main where
 
 import Control.Concurrent.Async
---import Codec.Picture
 import Data.Word
 import Debug.Trace
 import Graphics.Image
@@ -17,14 +16,12 @@ import qualified Data.ByteString.Lazy as B
 import System.Directory
 import System.FilePath
 import Data.List as L
---import Data.Vector.Generic
-
-
 
 -- the input type of pixel
 data PixelRaw = PixelRaw Int Int Int
   deriving (Show, Eq)
 
+-- Conversion helper functions for converting a Pixel Raw into its corresponding QOIPixel type
 toQOIPixel :: PixelRaw -> QOIPixel
 toQOIPixel (PixelRaw r g b) = QOIPixelRaw r g b
 
@@ -43,20 +40,19 @@ data QOIPixel =
   QOIPixelIndex Int
   deriving (Show, Eq)
 
-
---instance Eq QOIPixelRaw where
---  QOIPixelRaw r1 g1 b1 == QOIPixelRaw r2 g2 b2 = r1 == r2 && g1 == g2 && b1 == b2
-
+-- Gets the pixel difference between two pixel raws
 getPixelDiff :: PixelRaw -> PixelRaw -> (Int, Int, Int)
 getPixelDiff (PixelRaw r1 g1 b1) (PixelRaw r2 g2 b2) = ((r1 - r2), (g1 - g2), (b1 - b2))
 
--- the hash function return values between [0..63], so the Map structure doesn't need to worry about having a limited size
+-- Hash function for mapping pixel values that are seen previously and indexing them within a Map
 hash :: PixelRaw -> Int
 hash (PixelRaw r g b) = (r * 3 + g * 5 + b * 7 + 255 * 11) `mod` 64
 
+-- Compares smaller difference between pixels
 isSmolDiff :: (Int, Int, Int) -> Bool
 isSmolDiff (dr, dg, db) = abs (dr) < 4 &&  abs (dg) < 4 &&  abs (db) < 4
 
+-- Compares larger difference between pixels
 isBeegDiff :: (Int, Int, Int) -> Bool
 isBeegDiff (dr, dg, db) = abs (dr) < 32 && abs (dg) < 16 && abs (db) < 16
 
@@ -67,12 +63,7 @@ isBeegDiff (dr, dg, db) = abs (dr) < 32 && abs (dg) < 16 && abs (db) < 16
 -- curr pix seen before?              -> QOI_OP_INDEX
 -- cant have shit in detroit huh      -> QOI_OP_RGB
 
---encode :: [QOIPixelRaw] -> [QOIPixel]
---encode path = do
---    file <- readImage path
---    let encodedImage = qoi file
---    return encodedImage
-
+-- Appends a new QOIPixelRun when there is a run of similar pixels
 appendRun :: [QOIPixel] -> Int -> [QOIPixel]
 appendRun out run
   | run > 0 = out ++ [QOIPixelRun run]
@@ -92,32 +83,27 @@ processPixels (prev:curr:rest) run seen out =
     then if run >= 62
       then processPixels (curr:rest) 1 seen (out ++ [QOIPixelRun run])
       else processPixels (curr:rest) (run + 1) seen out
-    -- Case 2 if we've seen curr pixel before
+    -- Case 2 if we've seen curr pixel before and indexed it with a hash
     else if member (hash curr) seen
       then processPixels (curr:rest) 0 seen ((appendRun out run) ++ [QOIPixelIndex (hash curr)])
---  -- Case 3 small difference
+--  -- Case 3 is a small difference between the previous pixel
       else if isSmolDiff (getPixelDiff prev curr)
         then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
---  -- Case 4 large difference
+--  -- Case 4 is a larger (but not too large) difference between the previous pixel
       else if isBeegDiff (getPixelDiff prev curr)
        then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
 --  -- Case 5 default case we just add it as it is
        else processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [(toQOIPixel curr)])
 
-
---encode :: [PixelRaw] -> [QOIPixel]
---encode pxs = do
---  let processed = processPixels pxs 0 empty []
-
+-- Maps pixels to pixel raws
 mapPixels :: [(Pixel RGB Double)] -> [PixelRaw]
 mapPixels arr = Prelude.map pixelToTuple arr
-
 
 -- Convert HIP pixel class to internal QOIPixelRaw
 pixelToTuple :: (Pixel RGB Double) -> PixelRaw
 pixelToTuple (PixelRGB r g b) = PixelRaw (round $ 255 * (r :: Double)) (round $ 255 * (g :: Double)) (round $ 255 * (b :: Double))
 
--- Convert QOIPixel into its corresponding byte by spec
+-- Convert QOIPixel into its corresponding byte by QOI spec
 encodeQOIPixelToBinaryString :: QOIPixel -> B.ByteString
 encodeQOIPixelToBinaryString (QOIPixelRaw r g b) =
   runPut $ do
@@ -172,6 +158,7 @@ createEndMarker =
     putWord8 0
     putWord8 1
   
+-- Runs the encode part of the program
 runEncode :: FilePath -> IO ()
 runEncode filePath = do
   let fileTitle = takeBaseName filePath
@@ -187,7 +174,7 @@ runEncode filePath = do
   writeByteStringListToDisk ("./output/" ++ fileTitle ++ ".qoi") binaryEncoding
   putStrLn (filePath ++ ": write to disk successful.")
 
--- Main program - run with "cabal run qoi"
+-- Main CLI program - run with "cabal run qoi" and ensure desired pngs are placed under ./input
 main :: IO ()
 main = do
   putStrLn "Welcome to our QOI Image Encoder!"
@@ -205,5 +192,3 @@ main = do
     _ -> do
         putStrLn "Invalid input. Please enter 'y' or 'n'."
         main
-  
-  
