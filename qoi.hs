@@ -49,7 +49,7 @@ getPixelDiff (PixelRaw r1 g1 b1) (PixelRaw r2 g2 b2) = ((r1 - r2), (g1 - g2), (b
 
 -- the hash function return values between [0..63], so the Map structure doesn't need to worry about having a limited size
 hash :: PixelRaw -> Int
-hash (PixelRaw r g b) = (r * 3 + g * 5 + b * 7 + 11) `mod` 64
+hash (PixelRaw r g b) = (r * 3 + g * 5 + b * 7 + 255 * 11) `mod` 64
 
 isSmolDiff :: (Int, Int, Int) -> Bool
 isSmolDiff (dr, dg, db) = abs (dr) < 4 &&  abs (dg) < 4 &&  abs (db) < 4
