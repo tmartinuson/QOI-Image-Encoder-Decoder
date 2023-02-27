@@ -142,6 +142,10 @@ encodeQOIPixelToBinaryString (QOIPixelIndex index) =
 encodeToBinary :: [(QOIPixel)] -> [B.ByteString]
 encodeToBinary arr = Prelude.map encodeQOIPixelToBinaryString arr
 
+-- Writes a list of ByteStrings to the given FilePath
+writeByteStringListToDisk :: FilePath -> [B.ByteString] -> IO ()
+writeByteStringListToDisk filePath byteStrings = B.writeFile filePath (mconcat byteStrings)
+
 --
 main :: IO ()
 main = do
@@ -154,4 +158,6 @@ main = do
   print processedPixels
   let binaryEncoding = encodeToBinary processedPixels
   print binaryEncoding
+  writeByteStringListToDisk "test.qoi" binaryEncoding
+  print "Write successful"
   
