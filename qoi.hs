@@ -2,6 +2,7 @@ module Main where
 
 import Control.Concurrent.Async
 import Data.Word
+import System.Directory as SD
 import Debug.Trace
 import Graphics.Image
 import Graphics.Image.Interface
@@ -77,9 +78,10 @@ appendRun out run
 processPixels :: [PixelRaw] -> Int -> Map Int PixelRaw -> FilePath -> IO ()
 --processPixels [] _ _ out = out
 processPixels [a] run seen f = do
-  B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelRun run))
+  if run > 0
+    then B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelRun run))
+    else return ()
 processPixels (prev:curr:rest) run seen f = do
-
   -- Case 1 where current pixel is the same as the previous pixel
   if prev == curr
     then if run >= 62
@@ -180,6 +182,7 @@ runEncode filePath = do
   putStrLn (filePath ++ ": created list of raw pixels.")
   let fst = head pixels
   let outFile = ("./output/" ++ fileTitle ++ ".qoi")
+--  removeFile outFile
   B.appendFile outFile (createHeader (cols image) (rows image))
   processPixels pixels 0 (singleton (hash fst) fst) outFile
   B.appendFile outFile createEndMarker
