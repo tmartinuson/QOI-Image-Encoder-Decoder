@@ -133,7 +133,7 @@ encodeQOIPixelToBinaryString (QOIPixelDiffBeeg dr dg db) =
     putWord8 ((((fromIntegral diffDr) .&. 0xF) `shiftL` 4) .|. ((fromIntegral diffDb) .&. 0xF))
 encodeQOIPixelToBinaryString (QOIPixelRun run) =
   runPut $ do
-    putWord8 ((3 `shiftL` 6) .|. (((fromIntegral run) .&. 0x3F)))
+    putWord8 ((3 `shiftL` 6) .|. (((fromIntegral (run - 1)) .&. 0x3F)))
 encodeQOIPixelToBinaryString (QOIPixelIndex index) =
   runPut $ do
     putWord8 ((0 `shiftL` 6) .|. (((fromIntegral index) .&. 0x3F)))
