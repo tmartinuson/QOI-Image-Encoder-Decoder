@@ -9,11 +9,14 @@ import Graphics.Image.Interface
 import qualified Data.Vector.Unboxed as VU
 import Data.Bits (Bits(xor, shiftL))
 import Control.Concurrent (yield)
-import Data.Map
+import Data.Map as M
 import qualified Control.Applicative as Map
 import Data.Bits
 import Data.Binary.Put
 import qualified Data.ByteString.Lazy as B
+import System.Directory
+import System.FilePath
+import Data.List as L
 --import Data.Vector.Generic
 
 
@@ -94,12 +97,12 @@ processPixels (prev:curr:rest) run seen out =
       then processPixels (curr:rest) 0 seen ((appendRun out run) ++ [QOIPixelIndex (hash curr)])
 --  -- Case 3 small difference
       else if isSmolDiff (getPixelDiff prev curr)
-        then processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
+        then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
 --  -- Case 4 large difference
       else if isBeegDiff (getPixelDiff prev curr)
-       then processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
+       then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
 --  -- Case 5 default case we just add it as it is
-       else processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [(toQOIPixel curr)])
+       else processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [(toQOIPixel curr)])
 
 
 --encode :: [PixelRaw] -> [QOIPixel]
@@ -168,23 +171,39 @@ createEndMarker =
     putWord8 0
     putWord8 0
     putWord8 1
-
---
-main :: IO ()
-main = do
---   Load image from file
-  image <- readImageRGB VU "test3.png"
-  print "Read image"
+  
+runEncode :: FilePath -> IO ()
+runEncode filePath = do
+  let fileTitle = takeBaseName filePath
+  image <- readImageRGB VU ("./input/" ++ filePath)
+  putStrLn (filePath ++ ": reading file as image.")
   let pixels = mapPixels (VU.toList (toVector image))
-  --print pixels
-  print "Grabbed raw pixels"
+  putStrLn (filePath ++ ": created list of raw pixels.")
   let fst = head pixels
   let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
-  print "Processed QOI Pixels"
-  print processedPixels
+  putStrLn (filePath ++ ": processed raw pixels into QOI pixels.")
   let binaryEncoding = [createHeader (cols image) (rows image)] ++ (encodeToBinary processedPixels) ++ [createEndMarker]
-  print "Encoded as Binary"
-  --print binaryEncoding
-  writeByteStringListToDisk "test3.qoi" binaryEncoding
-  print "Write successful"
+  putStrLn (filePath ++ ": encoded QOI pixels into binary.")
+  writeByteStringListToDisk ("./output/" ++ fileTitle ++ ".qoi") binaryEncoding
+  putStrLn (filePath ++ ": write to disk successful.")
+
+-- Main program - run with "cabal run qoi"
+main :: IO ()
+main = do
+  putStrLn "Welcome to our QOI Image Encoder!"
+  putStrLn "Please ensure your images (.png) that you would like to be encoded are under ./input."
+  putStrLn "Would you like to begin y/n?"
+  input <- getLine
+  case input of
+    "y" -> do
+        files <- getDirectoryContents "./input"
+        let filePaths = L.filter (".png" `isSuffixOf`) files
+        _ <- mapConcurrently runEncode filePaths
+        putStrLn "Finishing Run..."
+    "n" -> do
+        putStrLn "Exiting QOI Image Encoder"
+    _ -> do
+        putStrLn "Invalid input. Please enter 'y' or 'n'."
+        main
+  
   

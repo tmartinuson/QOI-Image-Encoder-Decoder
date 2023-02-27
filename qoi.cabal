@@ -13,4 +13,6 @@ executable qoi
     vector,
     containers,
     binary,
-    bytestring
+    bytestring,
+    directory,
+    filepath
