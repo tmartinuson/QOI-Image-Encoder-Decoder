@@ -79,25 +79,24 @@ appendRun out run
 -- returns an encoded list
 processPixels :: [PixelRaw] -> Int -> Map Int PixelRaw -> [QOIPixel] -> [QOIPixel]
 processPixels [] _ _ out = out
-processPixels [a] run seen out =
-  if run > 0
-  then out ++ [QOIPixelRun run]
-  else if member (hash a) seen
-    then (out ++ [QOIPixelIndex $ hash a])
-    else (out ++ [toQOIPixel a])
-processPixels (prev:curr:rest) run seen out --TODO add to start of list first pixel when calling func
+processPixels [a] run seen out = (appendRun out run)
+processPixels (prev:curr:rest) run seen out = --TODO add to start of list first pixel when calling func
   -- Case 1 where current pixel is the same as the previous pixel
-  | prev == curr = if run >= 62
-                   then processPixels (curr:rest) 0 seen (out ++ [QOIPixelRun run])
-                   else processPixels (curr:rest) (run + 1) seen out
-  -- Case 2 if we've seen curr pixel before
-  | member (hash curr) seen = processPixels (curr:rest) 0 seen ((appendRun out run) ++ [QOIPixelIndex (hash curr)])
-  -- Case 3 small difference
-  | isSmolDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
-  -- Case 4 large difference
-  | isBeegDiff (getPixelDiff prev curr) = processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
-  -- Case 5 default case we just add it as it is
-  | otherwise = processPixels (curr:rest) 0 (insert (hash curr) curr seen) (out ++ [(toQOIPixel curr)])
+  if prev == curr
+    then if run >= 62
+      then processPixels (curr:rest) 0 seen (out ++ [QOIPixelRun run])
+      else processPixels (curr:rest) (run + 1) seen out
+    -- Case 2 if we've seen curr pixel before
+    else if member (hash curr) seen
+      then processPixels (curr:rest) 0 seen ((appendRun out run) ++ [QOIPixelIndex (hash curr)])
+--  -- Case 3 small difference
+      else if isSmolDiff (getPixelDiff prev curr)
+        then processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
+--  -- Case 4 large difference
+      else if isBeegDiff (getPixelDiff prev curr)
+       then processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
+--  -- Case 5 default case we just add it as it is
+       else processPixels (curr:rest) 0 (insert (hash curr) curr seen) ((appendRun out run) ++ [(toQOIPixel curr)])
 
 
 --encode :: [PixelRaw] -> [QOIPixel]
@@ -118,5 +117,7 @@ main = do
 --   Load image from file
   image <- readImageRGB VU "test.png"
   let pixels = mapPixels (VU.toList (toVector image))
-  let processedPixels = processPixels pixels 0 empty []
+  print pixels
+  let fst = head pixels
+  let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
   print processedPixels
