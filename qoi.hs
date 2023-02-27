@@ -158,6 +158,15 @@ createHeader width height =
     putWord8 3 -- RGB channels only supported
     putWord8 1 -- linear channels for colorspace
 
+createEndMarker :: B.ByteString
+createEndMarker = 
+  runPut $ do
+    putWord32le 0
+    putWord8 0
+    putWord8 0
+    putWord8 0
+    putWord8 1
+
 --
 main :: IO ()
 main = do
@@ -168,7 +177,7 @@ main = do
   let fst = head pixels
   let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
   print processedPixels
-  let binaryEncoding = (createHeader (cols image) (rows image)):(encodeToBinary processedPixels)
+  let binaryEncoding = [createHeader (cols image) (rows image)] ++ (encodeToBinary processedPixels) ++ [createEndMarker]
   print binaryEncoding
   writeByteStringListToDisk "test.qoi" binaryEncoding
   print "Write successful"
