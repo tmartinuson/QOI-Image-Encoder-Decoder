@@ -35,3 +35,5 @@ Our program will take a folder that contains several images and compress them as
 
 ## What did we learn from doing this?
 (This should be written after you have done the work.)What is the bottom-line? Is functional programming suitable for (part-of) the task? Make sure you include the evidence for your claims.
+
+Pixel encoding is quite a challenging task and that is not as simple to come up with a solution as originally thought. This task required a different way of approaching the problem than other types of programming in which conversions between types and manipulating values felt a bit more redundant when using functional programming for this task. The nice thing was that pattern matching was found to be really helpful when it came to identifying different cases for encoding our QOI pixels which is something Haskell definitely excels at.
