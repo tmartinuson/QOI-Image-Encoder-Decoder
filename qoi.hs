@@ -138,6 +138,10 @@ encodeQOIPixelToBinaryString (QOIPixelIndex index) =
   runPut $ do
     putWord8 ((0 `shiftL` 6) .|. (((fromIntegral index) .&. 0x3F)))
 
+-- Helper function for mapping all QOIPixels to their binary representations above
+encodeToBinary :: [(QOIPixel)] -> [B.ByteString]
+encodeToBinary arr = Prelude.map encodeQOIPixelToBinaryString arr
+
 --
 main :: IO ()
 main = do
@@ -148,3 +152,6 @@ main = do
   let fst = head pixels
   let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
   print processedPixels
+  let binaryEncoding = encodeToBinary processedPixels
+  print binaryEncoding
+  
