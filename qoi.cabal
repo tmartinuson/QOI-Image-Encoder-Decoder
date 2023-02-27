@@ -11,4 +11,6 @@ executable qoi
     async,
     hip,
     vector,
-    containers
+    containers,
+    binary,
+    bytestring

@@ -7,10 +7,13 @@ import Debug.Trace
 import Graphics.Image
 import Graphics.Image.Interface
 import qualified Data.Vector.Unboxed as VU
-import Data.Bits (Bits(xor))
+import Data.Bits (Bits(xor, shiftL))
 import Control.Concurrent (yield)
 import Data.Map
 import qualified Control.Applicative as Map
+import Data.Bits
+import Data.Binary.Put
+import qualified Data.ByteString.Lazy as B
 --import Data.Vector.Generic
 
 
@@ -110,6 +113,30 @@ mapPixels arr = Prelude.map pixelToTuple arr
 -- Convert HIP pixel class to internal QOIPixelRaw
 pixelToTuple :: (Pixel RGB Double) -> PixelRaw
 pixelToTuple (PixelRGB r g b) = PixelRaw (round $ 255 * (r :: Double)) (round $ 255 * (g :: Double)) (round $ 255 * (b :: Double))
+
+-- Convert QOIPixel into its corresponding byte by spec
+encodeQOIPixelToBinaryString :: QOIPixel -> B.ByteString
+encodeQOIPixelToBinaryString (QOIPixelRaw r g b) =
+  runPut $ do
+    putWord8 254
+    putWord8 (fromIntegral r)
+    putWord8 (fromIntegral g)
+    putWord8 (fromIntegral b)
+encodeQOIPixelToBinaryString (QOIPixelDiffSmol dr dg db) =
+  runPut $ do
+    putWord8 ((1 `shiftL` 6) .|. (((fromIntegral dr) .&. 0x3) `shiftL` 4) .|. (((fromIntegral dg) .&. 0x3) `shiftL` 2) .|. (((fromIntegral db) .&. 0x3)))
+encodeQOIPixelToBinaryString (QOIPixelDiffBeeg dr dg db) =
+  runPut $ do
+    putWord8 ((2 `shiftL` 6) .|. (((fromIntegral dg) .&. 0x3F)))
+    let diffDr = dr - dg
+    let diffDb = db - dg
+    putWord8 ((((fromIntegral diffDr) .&. 0xF) `shiftL` 4) .|. ((fromIntegral diffDb) .&. 0xF))
+encodeQOIPixelToBinaryString (QOIPixelRun run) =
+  runPut $ do
+    putWord8 ((3 `shiftL` 6) .|. (((fromIntegral run) .&. 0x3F)))
+encodeQOIPixelToBinaryString (QOIPixelIndex index) =
+  runPut $ do
+    putWord8 ((0 `shiftL` 6) .|. (((fromIntegral index) .&. 0x3F)))
 
 --
 main :: IO ()
