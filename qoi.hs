@@ -153,10 +153,10 @@ createHeader width height =
     putWord8 111 -- o
     putWord8 105 -- i
     putWord8 102 -- f
-    putWord32le (fromIntegral width)
-    putWord32le (fromIntegral height)
+    putWord32be (fromIntegral width)
+    putWord32be (fromIntegral height)
     putWord8 3 -- RGB channels only supported
-    putWord8 1 -- linear channels for colorspace
+    putWord8 0 -- linear channels for colorspace
 
 createEndMarker :: B.ByteString
 createEndMarker = 
