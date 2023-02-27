@@ -25,6 +25,8 @@ To run this program type the following in shell while within the project folder:
 
 ```cabal run qoi```
 
+Place any desired 3-channel RGB .pngs within the ./images folder for encoding into .qoi. QOI files will be placed in ./output when finished.
+
 ## What is the problem?
 PNG images take up too much space and in the modern day of machine learning this is definitely not tolerable. In comes QOI image compressions, which provides a fast lossless image compression from PNG to QOI that is 50x faster and that reduces the size of an image by ~20%.
 
