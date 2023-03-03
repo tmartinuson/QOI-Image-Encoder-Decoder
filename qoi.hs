@@ -25,6 +25,7 @@ data PixelRaw = PixelRaw Int Int Int
 toQOIPixel :: PixelRaw -> QOIPixel
 toQOIPixel (PixelRaw r g b) = QOIPixelRaw r g b
 
+-- These 2 functions assume getPixelDiff is called
 toQOIPixelDiffBeeg :: (Int, Int, Int) -> QOIPixel
 toQOIPixelDiffBeeg (r, g, b) = QOIPixelDiffBeeg r g b
 
@@ -42,7 +43,7 @@ data QOIPixel =
 
 -- Gets the pixel difference between two pixel raws
 getPixelDiff :: PixelRaw -> PixelRaw -> (Int, Int, Int)
-getPixelDiff (PixelRaw r1 g1 b1) (PixelRaw r2 g2 b2) = ((r1 - r2), (g1 - g2), (b1 - b2))
+getPixelDiff (PixelRaw r1 g1 b1) (PixelRaw r2 g2 b2) = ((r1 - r2) `mod` 256 , (g1 - g2) `mod` 256, (b1 - b2) `mod` 256)
 
 -- Hash function for mapping pixel values that are seen previously and indexing them within a Map
 hash :: PixelRaw -> Int
@@ -54,7 +55,7 @@ isSmolDiff (dr, dg, db) = abs (dr) < 4 &&  abs (dg) < 4 &&  abs (db) < 4
 
 -- Compares larger difference between pixels
 isBeegDiff :: (Int, Int, Int) -> Bool
-isBeegDiff (dr, dg, db) = abs (dr) < 32 && abs (dg) < 16 && abs (db) < 16
+isBeegDiff (dr, dg, db) = abs (dg) < 32 && abs (dr) < 16 && abs (db) < 16
 
 -- Encoding Algorithm
 -- prev pix == curr pix               -> QOI_OP_RUN
@@ -113,13 +114,13 @@ encodeQOIPixelToBinaryString (QOIPixelRaw r g b) =
     putWord8 (fromIntegral b)
 encodeQOIPixelToBinaryString (QOIPixelDiffSmol dr dg db) =
   runPut $ do
-    putWord8 ((1 `shiftL` 6) .|. (((fromIntegral dr) .&. 0x3) `shiftL` 4) .|. (((fromIntegral dg) .&. 0x3) `shiftL` 2) .|. (((fromIntegral db) .&. 0x3)))
+    putWord8 ((1 `shiftL` 6) .|. (((fromIntegral $ dr + 2) .&. 0x3) `shiftL` 4) .|. (((fromIntegral $ dg + 2) .&. 0x3) `shiftL` 2) .|. (((fromIntegral $ db + 2) .&. 0x3)))
 encodeQOIPixelToBinaryString (QOIPixelDiffBeeg dr dg db) =
   runPut $ do
-    putWord8 ((2 `shiftL` 6) .|. (((fromIntegral dg) .&. 0x3F)))
+    putWord8 ((2 `shiftL` 6) .|. (((fromIntegral $ dg + 32) .&. 0x3F)))
     let diffDr = dr - dg
     let diffDb = db - dg
-    putWord8 ((((fromIntegral diffDr) .&. 0xF) `shiftL` 4) .|. ((fromIntegral diffDb) .&. 0xF))
+    putWord8 ((((fromIntegral $ diffDr + 8) .&. 0xF) `shiftL` 4) .|. ((fromIntegral $ diffDb + 8) .&. 0xF))
 encodeQOIPixelToBinaryString (QOIPixelRun run) =
   runPut $ do
     putWord8 ((3 `shiftL` 6) .|. (((fromIntegral (run - 1)) .&. 0x3F)))
