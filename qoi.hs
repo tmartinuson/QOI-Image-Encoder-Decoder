@@ -17,6 +17,7 @@ import qualified Data.ByteString.Lazy as B
 import System.Directory
 import System.FilePath
 import Data.List as L
+import Data.Time.Clock.System
 
 -- the input type of pixel
 data PixelRaw = PixelRaw Int Int Int
@@ -76,7 +77,6 @@ appendRun out run
 -- last argument is array that is the array to write to
 -- returns an encoded list
 processPixels :: [PixelRaw] -> Int -> Map Int PixelRaw -> FilePath -> IO ()
---processPixels [] _ _ out = out
 processPixels [a] run seen f = do
   if run > 0
     then B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelRun run))
@@ -92,20 +92,32 @@ processPixels (prev:curr:rest) run seen f = do
     -- Case 2 if we've seen curr pixel before and indexed it with a hash
     else if member (hash curr) seen
       then do
+        if run > 0
+          then B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelRun run))
+          else return ()
         B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelIndex (hash curr)))
         processPixels (curr:rest) 0 seen f
 --  -- Case 3 is a small difference between the previous pixel
       else if isSmolDiff (getPixelDiff prev curr)
         then do
+          if run > 0
+            then B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelRun run))
+            else return ()
           B.appendFile f (encodeQOIPixelToBinaryString (toQOIPixelDiffSmol (getPixelDiff prev curr)))
           processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) f
 --  -- Case 4 is a larger (but not too large) difference between the previous pixel
       else if isBeegDiff (getPixelDiff prev curr)
        then do
+         if run > 0
+           then B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelRun run))
+           else return ()
          B.appendFile f (encodeQOIPixelToBinaryString (toQOIPixelDiffBeeg (getPixelDiff prev curr)))
          processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) f
 --  -- Case 5 default case we just add it as it is
        else do
+         if run > 0
+           then B.appendFile f (encodeQOIPixelToBinaryString (QOIPixelRun run))
+           else return ()
          B.appendFile f (encodeQOIPixelToBinaryString ((toQOIPixel curr)))
          processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) f
 
@@ -162,6 +174,12 @@ createHeader width height =
     putWord8 3 -- RGB channels only supported
     putWord8 0 -- linear channels for colorspace
 
+getTime = do
+  time <- getSystemTime
+  let sec = systemSeconds time
+      nsec = systemNanoseconds time
+  return $ sec * 10^9 + fromIntegral nsec
+
 -- Creates the end marker for a qoi formatted file
 createEndMarker :: B.ByteString
 createEndMarker = 
@@ -176,37 +194,41 @@ createEndMarker =
 runEncode :: FilePath -> IO ()
 runEncode filePath = do
   let fileTitle = takeBaseName filePath
-  image <- readImageRGB VU ("./input/" ++ filePath)
-  putStrLn (filePath ++ ": reading file as image.")
+  image <- readImageRGB VU ("./test/" ++ filePath)
+--  putStrLn (filePath ++ ": reading file as image.")
   let pixels = mapPixels (VU.toList (toVector image))
-  putStrLn (filePath ++ ": created list of raw pixels.")
+--  putStrLn (filePath ++ ": created list of raw pixels.")
   let fst = head pixels
   let outFile = ("./output/" ++ fileTitle ++ ".qoi")
 --  removeFile outFile
+  start <- getTime
   B.appendFile outFile (createHeader (cols image) (rows image))
+  B.appendFile outFile (encodeQOIPixelToBinaryString (toQOIPixel fst))
   processPixels pixels 0 (singleton (hash fst) fst) outFile
   B.appendFile outFile createEndMarker
-  putStrLn (filePath ++ ": processed raw pixels into QOI pixels.")
+  end <- getTime
+  putStrLn $ show $ (end - start)
+--  putStrLn (filePath ++ ": processed raw pixels into QOI pixels.")
 --  let binaryEncoding = [createHeader (cols image) (rows image)] ++ (encodeToBinary processedPixels) ++ [createEndMarker]
-  putStrLn (filePath ++ ": encoded QOI pixels into binary.")
+--  putStrLn (filePath ++ ": encoded QOI pixels into binary.")
 --  writeByteStringListToDisk ("./output/" ++ fileTitle ++ ".qoi") binaryEncoding
-  putStrLn (filePath ++ ": write to disk successful.")
+--  putStrLn (filePath ++ ": write to disk successful.")
 
 -- Main CLI program - run with "cabal run qoi" and ensure desired pngs are placed under ./input
 main :: IO ()
 main = do
   putStrLn "Welcome to our QOI Image Encoder!"
   putStrLn "Please ensure your images (.png) that you would like to be encoded are under ./input."
-  putStrLn "Would you like to begin y/n?"
-  input <- getLine
-  case input of
-    "y" -> do
-        files <- getDirectoryContents "./input"
-        let filePaths = L.filter (".png" `isSuffixOf`) files
-        _ <- mapConcurrently runEncode filePaths
-        putStrLn "Finishing Run..."
-    "n" -> do
-        putStrLn "Exiting QOI Image Encoder"
-    _ -> do
-        putStrLn "Invalid input. Please enter 'y' or 'n'."
-        main
+--  putStrLn "Would you like to begin y/n?"
+--  input <- getLine
+--  case input of
+--    "y" -> do
+  files <- getDirectoryContents "./test"
+  let filePaths = L.filter (".png" `isSuffixOf`) files
+  _ <- mapConcurrently runEncode filePaths
+  putStrLn "Finishing Run..."
+--    "n" -> do
+--        putStrLn "Exiting QOI Image Encoder"
+--    _ -> do
+--        putStrLn "Invalid input. Please enter 'y' or 'n'."
+--        main
