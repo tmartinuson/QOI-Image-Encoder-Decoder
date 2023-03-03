@@ -5,7 +5,7 @@ import Data.Word
 import Debug.Trace
 import Graphics.Image
 import Graphics.Image.Interface
-import qualified Data.Vector.Unboxed as VU
+import Data.Vector.Unboxed
 import Data.Bits (Bits(xor, shiftL))
 import Control.Concurrent (yield)
 import Data.Map as M
@@ -66,7 +66,7 @@ isBeegDiff (dr, dg, db) = abs (dr) < 32 && abs (dg) < 16 && abs (db) < 16
 -- Appends a new QOIPixelRun when there is a run of similar pixels
 appendRun :: [QOIPixel] -> Int -> [QOIPixel]
 appendRun out run
-  | run > 0 = out ++ [QOIPixelRun run]
+  | run > 0 = out L.++ [QOIPixelRun run]
   | otherwise = out
 
 -- first 2 args are the previous pixel and curr pixel.
@@ -81,19 +81,19 @@ processPixels (prev:curr:rest) run seen out =
   -- Case 1 where current pixel is the same as the previous pixel
   if prev == curr
     then if run >= 62
-      then processPixels (curr:rest) 1 seen (out ++ [QOIPixelRun run])
+      then processPixels (curr:rest) 1 seen (out L.++ [QOIPixelRun run])
       else processPixels (curr:rest) (run + 1) seen out
     -- Case 2 if we've seen curr pixel before and indexed it with a hash
     else if member (hash curr) seen
-      then processPixels (curr:rest) 0 seen ((appendRun out run) ++ [QOIPixelIndex (hash curr)])
+      then processPixels (curr:rest) 0 seen ((appendRun out run) L.++ [QOIPixelIndex (hash curr)])
 --  -- Case 3 is a small difference between the previous pixel
       else if isSmolDiff (getPixelDiff prev curr)
-        then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
+        then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) L.++ [toQOIPixelDiffSmol (getPixelDiff prev curr)])
 --  -- Case 4 is a larger (but not too large) difference between the previous pixel
       else if isBeegDiff (getPixelDiff prev curr)
-       then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
+       then processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) L.++ [toQOIPixelDiffBeeg (getPixelDiff prev curr)])
 --  -- Case 5 default case we just add it as it is
-       else processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) ++ [(toQOIPixel curr)])
+       else processPixels (curr:rest) 0 (M.insert (hash curr) curr seen) ((appendRun out run) L.++ [(toQOIPixel curr)])
 
 -- Maps pixels to pixel raws
 mapPixels :: [(Pixel RGB Double)] -> [PixelRaw]
@@ -162,17 +162,17 @@ createEndMarker =
 runEncode :: FilePath -> IO ()
 runEncode filePath = do
   let fileTitle = takeBaseName filePath
-  image <- readImageRGB VU ("./input/" ++ filePath)
-  putStrLn (filePath ++ ": reading file as image.")
-  let pixels = mapPixels (VU.toList (toVector image))
-  putStrLn (filePath ++ ": created list of raw pixels.")
-  let fst = head pixels
-  let processedPixels = processPixels pixels 0 (singleton (hash fst) fst) [(toQOIPixel fst)]
-  putStrLn (filePath ++ ": processed raw pixels into QOI pixels.")
-  let binaryEncoding = [createHeader (cols image) (rows image)] ++ (encodeToBinary processedPixels) ++ [createEndMarker]
-  putStrLn (filePath ++ ": encoded QOI pixels into binary.")
-  writeByteStringListToDisk ("./output/" ++ fileTitle ++ ".qoi") binaryEncoding
-  putStrLn (filePath ++ ": write to disk successful.")
+  image <- readImageRGB VU ("./input/" L.++ filePath)
+  putStrLn (filePath L.++ ": reading file as image.")
+  let pixels = mapPixels (Data.Vector.Unboxed.toList (Graphics.Image.Interface.toVector image))
+  putStrLn (filePath L.++ ": created list of raw pixels.")
+  let fst = L.head pixels
+  let processedPixels = processPixels pixels 0 (M.singleton (hash fst) fst) [(toQOIPixel fst)]
+  putStrLn (filePath L.++ ": processed raw pixels into QOI pixels.")
+  let binaryEncoding = [createHeader (cols image) (rows image)] L.++ (encodeToBinary processedPixels) L.++ [createEndMarker]
+  putStrLn (filePath L.++ ": encoded QOI pixels into binary.")
+  writeByteStringListToDisk ("./output/" L.++ fileTitle L.++ ".qoi") binaryEncoding
+  putStrLn (filePath L.++ ": write to disk successful.")
 
 -- Main CLI program - run with "cabal run qoi" and ensure desired pngs are placed under ./input
 main :: IO ()
